@@ -6,7 +6,7 @@ name: Approve GH Workflows
 
 on:
   pull_request_target:
-    types: [opened, edited, reopened, synchronize, ready_for_review]
+    types: [edited, labeled, reopened, synchronize]
 
 permissions: {}
 
@@ -20,6 +20,8 @@ jobs:
 
     if: contains(github.event.pull_request.labels.*.name, 'ok-to-test')
     steps:
+    - name: Wait for workflows to be created
+      run: sleep 10
     - name: Update PR
       uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
       continue-on-error: true

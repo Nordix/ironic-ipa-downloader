@@ -45,6 +45,7 @@ IPA_FLAVOR="${IPA_FLAVOR:-centos9}"
 IPA_ARCH="${IPA_ARCH:-}"
 
 FILENAME="${IPA_FILENAME:-ipa-${IPA_FLAVOR}-${IPA_BRANCH}.tar.gz}"
+SHA256_FILENAME="${FILENAME}.sha256"
 FILENAME_NO_EXT=$(get_filename_without_extension "${FILENAME}")
 DESTNAME="ironic-python-agent${IPA_ARCH:+_${IPA_ARCH}}"
 
@@ -52,6 +53,14 @@ mkdir -p "${SHARED_DIR}"/html/images "${SHARED_DIR}"/tmp
 cd "${SHARED_DIR}"/html/images
 
 TMPDIR="$(mktemp -d -p "${SHARED_DIR}"/tmp)"
+
+cleanup_tmpdir() {
+    if [ -n "${TMPDIR:-}" ] && [ -d "${TMPDIR}" ]; then
+        rm -rf -- "${TMPDIR}"
+    fi
+}
+
+trap cleanup_tmpdir EXIT
 
 # If we have a CACHEURL and nothing has yet been downloaded
 # get header info from the cache
@@ -82,6 +91,13 @@ else
 fi
 
 if [ -s "${FILENAME}" ]; then
+    if curl_with_flags -g --fail -O "${IPA_BASEURI}/${SHA256_FILENAME}"; then
+        # Archives publish either "hash  filename" or a bare hash; field 1 is the hash either way.
+        awk -v f="${FILENAME}" '{print $1 "  " f; exit}' "${SHA256_FILENAME}" | sha256sum --check -
+    else
+        echo "WARNING: ${SHA256_FILENAME} not available at ${IPA_BASEURI}, skipping verification" >&2
+    fi
+
     tar -xaf "${FILENAME}"
 
     ETAG="$(awk '/ETag:/ {print $2}' "${FILENAME}.headers" | tr -d "\"\r")"
@@ -91,6 +107,4 @@ if [ -s "${FILENAME}" ]; then
     ln -sf "${FILENAME}-${ETAG}/${FILENAME}.headers" "${DESTNAME}.headers"
     ln -sf "${FILENAME}-${ETAG}/${FILENAME_NO_EXT}.initramfs" "${DESTNAME}.initramfs"
     ln -sf "${FILENAME}-${ETAG}/${FILENAME_NO_EXT}.kernel" "${DESTNAME}.kernel"
-else
-    rm -rf "${TMPDIR}"
 fi
